@@ -6,6 +6,10 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer((http.Dir("."))))
+	mux.HandleFunc("/assets/logo.png", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "chirpy.png")
+	})
 	corsMux := middlewareCors(mux)
 	s := http.Server{
 		Addr:    ":8080",
@@ -25,4 +29,8 @@ func middlewareCors(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func logo(w http.ResponseWriter, r *http.Request) {
+
 }
