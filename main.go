@@ -1,57 +1,16 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 )
 
 type apiConfig struct {
 	fileserverHits int
-}
-
-func main() {
-	mux := http.NewServeMux()
-	apiCfg := apiConfig{
-		fileserverHits: 0,
-	}
-	mux.Handle("/app/*", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer((http.Dir("."))))))
-
-	mux.HandleFunc("/assets/logo.png", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "assets/logo.png")
-	})
-	mux.HandleFunc(("/healthz"), func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK\n"))
-	})
-	mux.HandleFunc(("/metrics"), func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Hits: %v\n", apiCfg.fileserverHits)
-	})
-	mux.HandleFunc(("/reset"), func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		apiCfg.fileserverHits = 0
-	})
-
-	corsMux := middlewareCors(mux)
-	s := http.Server{
-		Addr:    ":8080",
-		Handler: corsMux,
-	}
-	s.ListenAndServe()
-}
-
-func middlewareCors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	DB             *DB
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -59,4 +18,60 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 		cfg.fileserverHits++
 		next.ServeHTTP(w, r)
 	})
+}
+
+const database string = "./database.json"
+
+func main() {
+
+	const filepathRoot = "."
+	const port = "8080"
+	var apiCfg apiConfig
+	var err error
+	apiCfg.DB, err = NewDB(database)
+
+	dbg := flag.Bool("debug", false, "Enable debug mode")
+	flag.Parse()
+	if *dbg {
+		err := os.Remove(database)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if err != nil {
+		fmt.Printf("Error when loading DB File: %s", err.Error())
+	}
+
+	mux := http.NewServeMux()
+	handler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
+	mux.Handle("/", apiCfg.middlewareMetricsInc(handler))
+	mux.HandleFunc("GET /api/healthz", healthz)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.metrics)
+	mux.HandleFunc("/api/reset", apiCfg.reset)
+	mux.HandleFunc("POST /api/chirps", apiCfg.PostChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirpID)
+	mux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
+	mux.HandleFunc("POST /api/users", apiCfg.PostUsers)
+	mux.HandleFunc("POST /healthz", posthealthz)
+
+	s := http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
+	log.Fatal(s.ListenAndServe())
+
+}
+
+func healthz(w http.ResponseWriter, req *http.Request) {
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK\n"))
+}
+
+func posthealthz(w http.ResponseWriter, req *http.Request) {
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusMethodNotAllowed)
+	w.Write([]byte("Method not allowed\n"))
 }
