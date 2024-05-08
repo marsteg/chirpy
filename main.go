@@ -14,6 +14,7 @@ type apiConfig struct {
 	fileserverHits int
 	DB             *DB
 	JWT_SECRET     string
+	PolkaAPIKey    string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -33,6 +34,7 @@ func main() {
 	var err error
 	godotenv.Load()
 	apiCfg.JWT_SECRET = os.Getenv("JWT_SECRET")
+	apiCfg.PolkaAPIKey = os.Getenv("POLKA_API_KEY")
 
 	apiCfg.DB, err = NewDB(database)
 
@@ -64,6 +66,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.PostLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.PostRefresh)
 	mux.HandleFunc("POST /api/revoke", apiCfg.PostRevoke)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.PostPolkaWebhooks)
 	mux.HandleFunc("POST /healthz", posthealthz)
 
 	s := http.Server{

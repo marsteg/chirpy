@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -46,12 +47,54 @@ func (cfg *apiConfig) GetChirps(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		respondWithError(w, 500, "cannot load db")
 	}
+	/* Update the GET /api/chirps endpoint. It should accept an optional query parameter called sort. It can have 2 possible values:
+
+	asc - Sort the chirps in the response by id in ascending order
+	desc - Sort the chirps in the response by id in descending order
+	asc is the default if no sort query parameter is provided.
+	*/
+	ssort := req.URL.Query().Get("sort")
+	if ssort != "asc" && ssort != "desc" {
+		ssort = "asc"
+	}
+	// sort by id in ascending order
+
+	author_id := req.URL.Query().Get("author_id")
+	if author_id != "" {
+		author_id_int, err := strconv.Atoi(author_id)
+		if err != nil {
+			respondWithError(w, 400, "author_id could not be parsed")
+		}
+		Chirps := []Chirp{}
+
+		for _, chirp := range db.Chirps {
+			if chirp.AuthorID == author_id_int {
+				Chirps = append(Chirps, chirp)
+			}
+		}
+		Chirps = SortingChirps(Chirps, ssort)
+		respondWithJSON(w, 200, Chirps)
+	}
+
 	Chirps := []Chirp{}
 	for _, chirp := range db.Chirps {
 		Chirps = append(Chirps, chirp)
 	}
-
+	Chirps = SortingChirps(Chirps, ssort)
 	respondWithJSON(w, 200, Chirps)
+}
+
+func SortingChirps(Chirps []Chirp, ssort string) []Chirp {
+	if ssort == "desc" {
+		sort.Slice(Chirps, func(i, j int) bool {
+			return Chirps[i].ID > Chirps[j].ID
+		})
+	} else {
+		sort.Slice(Chirps, func(i, j int) bool {
+			return Chirps[i].ID < Chirps[j].ID
+		})
+	}
+	return Chirps
 }
 
 // deletes a Chirp from the database

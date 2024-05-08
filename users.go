@@ -29,6 +29,7 @@ type User struct {
 	Password          string    `json:"password"`
 	RefreshToken      string    `json:"refresh_token"`
 	RefreshExpiration time.Time `json:"refesh_expiration"`
+	IsChirpyRed       bool      `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) PostUsers(w http.ResponseWriter, req *http.Request) {
@@ -170,6 +171,7 @@ func (cfg *apiConfig) PutUsers(w http.ResponseWriter, req *http.Request) {
 		ID:                id,
 		RefreshToken:      user.RefreshToken,
 		RefreshExpiration: user.RefreshExpiration,
+		IsChirpyRed:       user.IsChirpyRed,
 	}
 	err = cfg.DB.UpdateUser(id, newUser)
 	if err != nil {
@@ -186,6 +188,7 @@ func (cfg *apiConfig) PutUsers(w http.ResponseWriter, req *http.Request) {
 			ID:                user.ID,
 			RefreshToken:      user.RefreshToken,
 			RefreshExpiration: user.RefreshExpiration,
+			IsChirpyRed:       user.IsChirpyRed,
 		},
 	}
 
@@ -241,6 +244,7 @@ func (cfg *apiConfig) PostLogin(w http.ResponseWriter, req *http.Request) {
 		Email        string `json:"email"`
 		Token        string `json:"token"`
 		RefreshToken string `json:"refresh_token"`
+		IsChirpyRed  bool   `json:"is_chirpy_red"`
 	}
 
 	rUser := returnUser{
@@ -248,6 +252,7 @@ func (cfg *apiConfig) PostLogin(w http.ResponseWriter, req *http.Request) {
 		Email:        user.Email,
 		Token:        token,
 		RefreshToken: refresh_token,
+		IsChirpyRed:  user.IsChirpyRed,
 	}
 
 	respondWithJSON(w, 200, rUser)

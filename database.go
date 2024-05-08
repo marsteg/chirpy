@@ -22,8 +22,6 @@ type DBStructure struct {
 var ErrAlreadyExists = errors.New("already exists")
 var ErrNotExist = errors.New("does not exist")
 
-// NewDB creates a new database connection
-// and creates the database file if it doesn't exist
 func NewDB(path string) (*DB, error) {
 	db := DB{
 		path: path,
@@ -131,9 +129,10 @@ func (db *DB) CreateUser(email string, password string) (User, error) {
 	id++
 
 	newUser := User{
-		Email:    email,
-		ID:       id,
-		Password: password,
+		Email:       email,
+		ID:          id,
+		Password:    password,
+		IsChirpyRed: false,
 	}
 	DBStructure.Users[id] = newUser
 	db.writeDB(DBStructure)
