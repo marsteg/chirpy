@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
+	"time"
 )
 
 type DB struct {
@@ -17,10 +19,8 @@ type DBStructure struct {
 	Users  map[int]User  `json:"users"`
 }
 
-type User struct {
-	Email string `json:"email"`
-	ID    int    `json:"id"`
-}
+var ErrAlreadyExists = errors.New("already exists")
+var ErrNotExist = errors.New("does not exist")
 
 // NewDB creates a new database connection
 // and creates the database file if it doesn't exist
@@ -37,7 +37,7 @@ func NewDB(path string) (*DB, error) {
 }
 
 // CreateChirp creates a new chirp and saves it to disk
-func (db *DB) CreateChirp(body string) (Chirp, error) {
+func (db *DB) CreateChirp(body string, userid int) (Chirp, error) {
 	DBStructure, err := db.loadDB()
 	if err != nil {
 		return Chirp{}, err
@@ -46,8 +46,9 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	id++
 
 	newChirp := Chirp{
-		Body: body,
-		ID:   id,
+		Body:     body,
+		ID:       id,
+		AuthorID: userid,
 	}
 	DBStructure.Chirps[id] = newChirp
 	db.writeDB(DBStructure)
@@ -105,14 +106,12 @@ func (db *DB) loadDB() (DBStructure, error) {
 func (db *DB) writeDB(dbStructure DBStructure) error {
 	bytedb, err := json.Marshal(dbStructure)
 	if err != nil {
-		errors.New("error marshalling new db")
 		return err
 	}
 	db.mux.Lock()
 	defer db.mux.Unlock()
 	err = os.WriteFile(db.path, bytedb, 0644)
 	if err != nil {
-		errors.New("error writing db")
 		return err
 	}
 
@@ -120,19 +119,133 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 
 }
 
-func (db *DB) CreateUser(email string) (User, error) {
+func (db *DB) CreateUser(email string, password string) (User, error) {
 	DBStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
+	//if _, err := db.GetUser(email); !errors.Is(err, ErrNotExist) {
+	//	return User{}, ErrAlreadyExists
+	//}
 	id := len(DBStructure.Users)
 	id++
 
 	newUser := User{
-		Email: email,
-		ID:    id,
+		Email:    email,
+		ID:       id,
+		Password: password,
 	}
 	DBStructure.Users[id] = newUser
 	db.writeDB(DBStructure)
 	return newUser, nil
+}
+
+// GetUser returns a user from the database
+func (db *DB) GetUserbyID(id int) (User, error) {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+	user, exists := DBStructure.Users[id]
+	if !exists {
+		err := errors.New("user not found in DB")
+		return User{}, err
+	}
+
+	return user, nil
+
+}
+
+// GetUser returns a user from the database
+func (db *DB) GetUserbyMail(email string) (User, error) {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+	var foundUser User
+	for _, user := range DBStructure.Users {
+		if user.Email == email {
+			foundUser = user
+			return foundUser, nil
+		}
+	}
+	return User{}, errors.New("User does not exist in DB")
+
+}
+
+// GetUser returns a user from the database
+func (db *DB) GetUserbyRefresh(refreshtoken string) (User, error) {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+	var foundUser User
+	for _, user := range DBStructure.Users {
+		if user.RefreshToken == refreshtoken {
+			foundUser = user
+			return foundUser, nil
+		}
+	}
+	return User{}, errors.New("refresh Token does not exist in DB")
+
+}
+
+// UpdateUser updates a user in the database
+func (db *DB) UpdateUser(id int, newUser User) error {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return err
+	}
+
+	user, exists := DBStructure.Users[id]
+	if !exists {
+		err := errors.New("user not found in DB")
+		return err
+	}
+	fmt.Printf("updating user with mail: %s\n", user.Email)
+	DBStructure.Users[id] = newUser
+	db.writeDB(DBStructure)
+	return nil
+}
+
+// Set a new refreshToken for a User
+func (db *DB) SetRefreshToken(id int, newtoken string, expiresIn time.Duration) error {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return err
+	}
+
+	user, exists := DBStructure.Users[id]
+	if !exists {
+		err := errors.New("user not found in DB")
+		return err
+	}
+	fmt.Printf("setting new refresh_token for user with mail: %s\n", user.Email)
+	user.RefreshToken = newtoken
+	user.RefreshExpiration = time.Now().UTC().Add(expiresIn)
+
+	DBStructure.Users[id] = user
+	db.writeDB(DBStructure)
+	return nil
+}
+
+// Delete refreshToken for a User
+func (db *DB) DelRefreshToken(id int) error {
+	DBStructure, err := db.loadDB()
+	if err != nil {
+		return err
+	}
+
+	user, exists := DBStructure.Users[id]
+	if !exists {
+		err := errors.New("user not found in DB")
+		return err
+	}
+	fmt.Printf("revoking refresh_token for user with mail: %s\n", user.Email)
+	user.RefreshToken = ""
+	user.RefreshExpiration = time.Now().UTC()
+
+	DBStructure.Users[id] = user
+	db.writeDB(DBStructure)
+	return nil
 }

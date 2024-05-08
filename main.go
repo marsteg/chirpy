@@ -6,11 +6,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type apiConfig struct {
 	fileserverHits int
 	DB             *DB
+	JWT_SECRET     string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -28,6 +31,9 @@ func main() {
 	const port = "8080"
 	var apiCfg apiConfig
 	var err error
+	godotenv.Load()
+	apiCfg.JWT_SECRET = os.Getenv("JWT_SECRET")
+
 	apiCfg.DB, err = NewDB(database)
 
 	dbg := flag.Bool("debug", false, "Enable debug mode")
@@ -51,8 +57,13 @@ func main() {
 	mux.HandleFunc("/api/reset", apiCfg.reset)
 	mux.HandleFunc("POST /api/chirps", apiCfg.PostChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirpID)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.DelChirpID)
 	mux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
 	mux.HandleFunc("POST /api/users", apiCfg.PostUsers)
+	mux.HandleFunc("PUT /api/users", apiCfg.PutUsers)
+	mux.HandleFunc("POST /api/login", apiCfg.PostLogin)
+	mux.HandleFunc("POST /api/refresh", apiCfg.PostRefresh)
+	mux.HandleFunc("POST /api/revoke", apiCfg.PostRevoke)
 	mux.HandleFunc("POST /healthz", posthealthz)
 
 	s := http.Server{

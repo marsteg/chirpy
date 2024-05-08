@@ -16,8 +16,9 @@ type parameters struct {
 }
 
 type Chirp struct {
-	Body string `json:"body"`
-	ID   int    `json:"id"`
+	Body     string `json:"body"`
+	ID       int    `json:"id"`
+	AuthorID int    `json:"author_id"`
 }
 
 func (cfg *apiConfig) GetChirpID(w http.ResponseWriter, req *http.Request) {
@@ -53,10 +54,53 @@ func (cfg *apiConfig) GetChirps(w http.ResponseWriter, req *http.Request) {
 	respondWithJSON(w, 200, Chirps)
 }
 
+// deletes a Chirp from the database
+func (cfg *apiConfig) DelChirpID(w http.ResponseWriter, req *http.Request) {
+	userid, err := cfg.ValidateHeader(req)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	db, err := cfg.DB.loadDB()
+	if err != nil {
+		respondWithError(w, 500, "cannot load db")
+	}
+	sid := req.PathValue("chirpID")
+	chirpid, err := strconv.Atoi(sid)
+	if err != nil {
+		respondWithError(w, 400, "Chirp id could not be parsed")
+	}
+	chirp, exists := db.Chirps[chirpid]
+	if !exists {
+		respondWithError(w, 404, "Chirp does not exist")
+		return
+	}
+	user, err := cfg.DB.GetUserbyID(userid)
+	if err != nil {
+		respondWithError(w, 500, "cannot get user by id")
+		return
+	}
+
+	if chirp.AuthorID != user.ID {
+		respondWithError(w, 403, "Unauthorized - different user")
+		return
+	}
+
+	delete(db.Chirps, chirpid)
+	cfg.DB.writeDB(db)
+	respondWithJSON(w, 200, "Chirp deleted")
+}
+
 func (cfg *apiConfig) PostChirps(w http.ResponseWriter, req *http.Request) {
+	userid, err := cfg.ValidateHeader(req)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		msg := "cannot decode json"
 		respondWithError(w, 500, msg)
@@ -69,7 +113,7 @@ func (cfg *apiConfig) PostChirps(w http.ResponseWriter, req *http.Request) {
 	}
 	cleaned_body := replaceProfane(params.Body)
 
-	validChirp, err := cfg.DB.CreateChirp(cleaned_body)
+	validChirp, err := cfg.DB.CreateChirp(cleaned_body, userid)
 	if err != nil {
 		fmt.Printf("error: %s", err.Error())
 	}
