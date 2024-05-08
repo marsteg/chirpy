@@ -75,7 +75,7 @@ func (cfg *apiConfig) PostRevoke(w http.ResponseWriter, req *http.Request) {
 		respondWithError(w, 401, "Unauthorized - expired refresh token")
 		return
 	}
-	cfg.DB.DelRefreshToken(user.ID)
+	err = cfg.DB.DelRefreshToken(user.ID)
 	if err != nil {
 		fmt.Printf("error revoking token: %s", err.Error())
 		respondWithError(w, 503, "error revoking token")
@@ -233,7 +233,7 @@ func (cfg *apiConfig) PostLogin(w http.ResponseWriter, req *http.Request) {
 
 	refresh_token := GetRefreshToken()
 
-	cfg.DB.SetRefreshToken(user.ID, refresh_token, time.Duration(time.Hour*24*60))
+	err = cfg.DB.SetRefreshToken(user.ID, refresh_token, time.Duration(time.Hour*24*60))
 	if err != nil {
 		respondWithError(w, 401, "cannot update refresh token in db")
 		return
